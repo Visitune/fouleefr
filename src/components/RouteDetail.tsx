@@ -93,7 +93,7 @@ export function RouteDetail({
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 min-h-[38px] px-2.5 -ml-2 rounded-md text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 min-h-[44px] md:min-h-[38px] px-2.5 -ml-2 rounded-md text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" aria-hidden="true" />
           <span>Tous les parcours</span>
@@ -103,7 +103,7 @@ export function RouteDetail({
           <button
             type="button"
             onClick={() => onCenterMap(route)}
-            className="inline-flex items-center gap-1.5 min-h-[38px] px-2.5 rounded-md border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+            className="inline-flex items-center gap-1.5 min-h-[44px] md:min-h-[38px] px-2.5 rounded-md border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
           >
             <Crosshair className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Centrer</span>
@@ -114,7 +114,7 @@ export function RouteDetail({
             aria-label={
               isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'
             }
-            className={`inline-flex items-center gap-1.5 min-h-[38px] px-3 rounded-md border text-xs font-medium transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 min-h-[44px] md:min-h-[38px] px-3 rounded-md border text-xs font-medium transition-colors cursor-pointer ${
               isFavorite
                 ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
                 : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
@@ -353,7 +353,7 @@ export function RouteDetail({
               onChange={(e) =>
                 setPracticability(e.target.value as PracticabilityStatus)
               }
-              className="w-full h-9 px-2 rounded-md border border-slate-200 bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+              className="w-full h-11 md:h-9 px-2 rounded-md border border-slate-200 bg-white text-base md:text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600"
             >
               <option value="praticable">Praticable</option>
               <option value="boueux">Boueux / Dégradé</option>
@@ -370,7 +370,7 @@ export function RouteDetail({
               onChange={(e) =>
                 setLightingOverride(e.target.value as LightingStatus)
               }
-              className="w-full h-9 px-2 rounded-md border border-slate-200 bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+              className="w-full h-11 md:h-9 px-2 rounded-md border border-slate-200 bg-white text-base md:text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-600"
             >
               <option value="eclaire">Éclairé</option>
               <option value="partiel">Partiellement éclairé</option>
@@ -388,10 +388,11 @@ export function RouteDetail({
                 type="button"
                 onClick={() => setRating(star)}
                 aria-label={`Noter ${star} sur 5`}
-                className="p-1 cursor-pointer"
+                aria-pressed={star <= rating}
+                className="p-2 md:p-1 cursor-pointer"
               >
                 <Star
-                  className={`w-4 h-4 ${
+                  className={`w-6 h-6 md:w-4 md:h-4 ${
                     star <= rating
                       ? 'text-amber-500 fill-amber-400'
                       : 'text-slate-300'
@@ -407,13 +408,13 @@ export function RouteDetail({
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           placeholder="Remarque courte (ex. flaques après pluie, fontaine active...)"
-          className="w-full h-9 px-3 rounded-md border border-slate-200 bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+          className="w-full h-11 md:h-9 px-3 rounded-md border border-slate-200 bg-white text-base md:text-xs text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-600"
         />
 
         <div className="flex items-center justify-between gap-2">
           <button
             type="submit"
-            className="px-3.5 py-2 min-h-[38px] rounded-md bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium transition-colors cursor-pointer"
+            className="px-4 py-2 min-h-[44px] md:min-h-[38px] rounded-md bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium transition-colors cursor-pointer"
           >
             Enregistrer le signalement
           </button>

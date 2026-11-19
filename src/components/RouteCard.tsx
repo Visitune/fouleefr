@@ -158,7 +158,7 @@ export function RouteCard({
           aria-label={
             isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'
           }
-          className={`min-h-[40px] min-w-[40px] flex items-center justify-center rounded-md border transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${
+          className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md border transition-colors shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${
             isFavorite
               ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
               : 'border-transparent text-slate-400 hover:text-slate-700 hover:bg-slate-50'

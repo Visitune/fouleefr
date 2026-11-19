@@ -91,8 +91,10 @@ export function ElevationChart({ profile, onHoverPoint }: ElevationChartProps) {
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="w-full h-28 touch-none cursor-crosshair select-none"
+        onPointerDown={handlePointerMove}
         onPointerMove={handlePointerMove}
         onPointerLeave={handlePointerLeave}
+        onPointerCancel={handlePointerLeave}
         role="img"
         aria-label="Graphique du profil altimétrique du parcours"
       >

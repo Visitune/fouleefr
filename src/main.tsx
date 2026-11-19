@@ -18,3 +18,12 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>
 );
+
+// PWA : service worker uniquement en production (évite de mettre en cache le serveur de dev).
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* l'application reste pleinement utilisable sans service worker */
+    });
+  });
+}

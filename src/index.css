@@ -14,6 +14,28 @@
     font-family: var(--font-sans);
   }
 
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Comportement « application » : pas de rebond ni de rafraîchissement en tirant la page,
+     pas de surbrillance au toucher, pas de zoom au double appui sur les contrôles. */
+  html,
+  body {
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  a,
+  select,
+  input,
+  label,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+
   h1,
   h2,
   h3 {
@@ -23,6 +45,31 @@
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* Boutons de zoom de la carte : plus grands au doigt */
+@media (pointer: coarse) {
+  .leaflet-touch .leaflet-bar a {
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-size: 20px;
+  }
+  .leaflet-touch .leaflet-bar {
+    border-radius: 10px;
+  }
+}
+
+/* Respecte le réglage « réduire les animations » du système */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Custom thin scrollbars for route lists */

@@ -122,7 +122,7 @@ export function SearchBar({ onSelectLocation, anchorLabel }: SearchBarProps) {
           aria-expanded={Boolean(results && results.length > 0)}
           autoComplete="off"
           maxLength={120}
-          className="w-full h-10 pl-9 pr-20 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-900 placeholder:text-slate-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition-colors"
+          className="w-full h-12 md:h-10 pl-9 pr-24 md:pr-20 rounded-lg border border-slate-200 bg-slate-50 text-base md:text-sm text-slate-900 placeholder:text-slate-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent transition-colors"
         />
         <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
           {query && (
@@ -134,7 +134,7 @@ export function SearchBar({ onSelectLocation, anchorLabel }: SearchBarProps) {
                 setError(null);
               }}
               aria-label="Effacer la recherche"
-              className="p-1.5 text-slate-500 hover:text-slate-800 cursor-pointer"
+              className="p-3 md:p-1.5 text-slate-500 hover:text-slate-800 cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -143,7 +143,7 @@ export function SearchBar({ onSelectLocation, anchorLabel }: SearchBarProps) {
             type="submit"
             disabled={isLoading}
             aria-label="Lancer la recherche"
-            className="p-1.5 rounded-md text-emerald-700 hover:bg-emerald-50 disabled:opacity-60 cursor-pointer"
+            className="p-3 md:p-1.5 rounded-md text-emerald-700 hover:bg-emerald-50 disabled:opacity-60 cursor-pointer"
           >
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
@@ -164,7 +164,7 @@ export function SearchBar({ onSelectLocation, anchorLabel }: SearchBarProps) {
                 <button
                   type="button"
                   onClick={() => pick(r)}
-                  className="w-full text-left px-3.5 py-2.5 text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-900 focus-visible:bg-emerald-50 focus-visible:outline-none flex items-start gap-2.5 cursor-pointer"
+                  className="w-full text-left px-3.5 py-3.5 md:py-2.5 text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-900 focus-visible:bg-emerald-50 focus-visible:outline-none flex items-start gap-2.5 cursor-pointer"
                 >
                   <MapPin
                     className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5"
@@ -189,7 +189,7 @@ export function SearchBar({ onSelectLocation, anchorLabel }: SearchBarProps) {
             key={city.name}
             type="button"
             onClick={() => onSelectLocation(city.point, city.name)}
-            className="px-2.5 py-1 min-h-[30px] text-xs font-medium rounded-md border border-slate-200 bg-white text-slate-700 hover:border-emerald-500 hover:text-emerald-700 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            className="px-3 py-2 min-h-[44px] md:px-2.5 md:py-1 md:min-h-[30px] text-sm md:text-xs font-medium rounded-md border border-slate-200 bg-white text-slate-700 hover:border-emerald-500 hover:text-emerald-700 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
             {city.name}
           </button>

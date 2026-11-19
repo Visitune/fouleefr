@@ -71,7 +71,7 @@ export function LoopBuilder({
           step={0.5}
           value={targetKm}
           onChange={(e) => setTargetKm(Number(e.target.value))}
-          className="w-full accent-emerald-600 cursor-pointer"
+          className="w-full h-9 md:h-5 accent-emerald-600 cursor-pointer"
         />
 
         <div className="flex flex-wrap gap-1.5">
@@ -80,7 +80,7 @@ export function LoopBuilder({
               key={d}
               type="button"
               onClick={() => setTargetKm(d)}
-              className={`px-2.5 py-1 min-h-[32px] rounded-md text-xs font-mono tabular-nums border transition-colors cursor-pointer ${
+              className={`px-3 py-2 min-h-[44px] md:px-2.5 md:py-1 md:min-h-[32px] rounded-md text-sm md:text-xs font-mono tabular-nums border transition-colors cursor-pointer ${
                 targetKm === d
                   ? 'bg-emerald-600 border-emerald-600 text-white'
                   : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-500'
@@ -101,7 +101,7 @@ export function LoopBuilder({
           <button
             type="button"
             onClick={() => setPreferWater((v) => !v)}
-            className={`w-full min-h-[42px] px-3 py-2 rounded-lg border text-left text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${
+            className={`w-full min-h-[52px] md:min-h-[42px] px-3 py-2 rounded-lg border text-left text-sm md:text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${
               preferWater
                 ? 'bg-sky-50 border-sky-400 text-sky-900'
                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -119,7 +119,7 @@ export function LoopBuilder({
           <button
             type="button"
             onClick={() => setPreferLit((v) => !v)}
-            className={`w-full min-h-[42px] px-3 py-2 rounded-lg border text-left text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${
+            className={`w-full min-h-[52px] md:min-h-[42px] px-3 py-2 rounded-lg border text-left text-sm md:text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${
               preferLit
                 ? 'bg-amber-50 border-amber-400 text-amber-900'
                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -137,7 +137,7 @@ export function LoopBuilder({
           <button
             type="button"
             onClick={() => setPreferFlat((v) => !v)}
-            className={`w-full min-h-[42px] px-3 py-2 rounded-lg border text-left text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${
+            className={`w-full min-h-[52px] md:min-h-[42px] px-3 py-2 rounded-lg border text-left text-sm md:text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${
               preferFlat
                 ? 'bg-emerald-50 border-emerald-500 text-emerald-900'
                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -171,7 +171,7 @@ export function LoopBuilder({
               key={opt.id}
               type="button"
               onClick={() => setTerrainPreference(opt.id)}
-              className={`py-2 px-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
+              className={`py-3 md:py-2 px-2 text-sm md:text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
                 terrainPreference === opt.id
                   ? 'bg-white text-slate-900 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
@@ -186,7 +186,7 @@ export function LoopBuilder({
       <button
         type="submit"
         disabled={isGenerating}
-        className="w-full min-h-[44px] py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] disabled:opacity-60 text-white text-sm font-medium inline-flex items-center justify-center gap-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+        className="sticky bottom-1 z-10 shadow-lg w-full min-h-[52px] md:min-h-[44px] py-3 md:py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] disabled:opacity-60 text-white text-base md:text-sm font-medium inline-flex items-center justify-center gap-2 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
       >
         {isGenerating ? (
           <>

@@ -25,6 +25,19 @@ npm test                     # tests unitaires
 npm run lint                 # vérification TypeScript (strict)
 ```
 
+## Application mobile (PWA)
+
+L'application s'installe sur l'écran d'accueil et s'ouvre en plein écran, comme une application native.
+
+- **Android (Chrome)** : une bannière « Installer » apparaît, ou menu ⋮ → *Installer l'application*.
+- **iPhone / iPad (Safari)** : bouton *Partager* → *Sur l'écran d'accueil*. (Safari n'offre pas d'installation automatique ; une bannière rappelle la marche à suivre.)
+- **Hors connexion** : l'interface s'ouvre et les favoris restent consultables. La carte et le calcul des parcours nécessitent Internet. Les appels `/api/*` ne sont jamais mis en cache, de sorte qu'un parcours affiché est toujours un calcul réel, et les tuiles de carte ne sont pas stockées (politique d'usage d'OpenStreetMap).
+- L'installation exige **HTTPS** : elle fonctionne sur le site déployé (Vercel), pas sur une adresse locale en `http://192.168…`.
+
+Mise en page mobile (< 768 px) : carte plein écran, panneau coulissant (glisser la poignée), barre de navigation en bas, bouton « ma position » flottant, cibles tactiles ≥ 44 px, champs en 16 px (pas de zoom automatique sur iPhone).
+
+Les icônes sont générées par `node scripts/make-icons.mjs` (sans dépendance) dans `public/icons/`. Le service worker est `public/sw.js` ; incrémentez `VERSION` pour forcer le renouvellement du cache.
+
 ## Architecture
 
 - `src/` : interface React 19 + Tailwind 4 + Leaflet (fonds OpenStreetMap / OpenTopoMap, aucune clé requise).

@@ -15,6 +15,8 @@ interface RunningMapProps {
   onAnchorMove: (point: LatLngPoint) => void;
   onSelectRoute: (route: RunningRoute) => void;
   onRadiusChange: (km: number) => void;
+  /** Hauteur (px) de la carte masquée par le panneau mobile : le cadrage en tient compte. */
+  bottomInset?: number;
 }
 
 type MapStyleMode = 'plan' | 'relief';
@@ -113,6 +115,7 @@ export function RunningMap({
   onAnchorMove,
   onSelectRoute,
   onRadiusChange,
+  bottomInset = 0,
 }: RunningMapProps) {
   const [mapType, setMapType] = useState<MapStyleMode>('plan');
 
@@ -303,8 +306,8 @@ export function RunningMap({
         selectedRoute.path.map((p) => [p.lat, p.lng] as L.LatLngTuple)
       );
       map.fitBounds(bounds, {
-        paddingTopLeft: [48, 64],
-        paddingBottomRight: [48, 64],
+        paddingTopLeft: [32, 64],
+        paddingBottomRight: [32, 48 + bottomInset],
         maxZoom: 17,
       });
       return;
@@ -314,9 +317,12 @@ export function RunningMap({
     if (key !== prevAnchorRef.current || centerTrigger !== prevTriggerRef.current) {
       prevAnchorRef.current = key;
       prevTriggerRef.current = centerTrigger;
-      map.setView([anchor.lat, anchor.lng], Math.max(map.getZoom(), 13), { animate: true });
+      map.setView([anchor.lat, anchor.lng], Math.max(map.getZoom(), 13), { animate: false });
+      // remonte le repère dans la partie visible quand le panneau mobile est ouvert
+      if (bottomInset > 0) map.panBy([0, bottomInset / 2], { animate: false });
     }
-  }, [anchor, selectedRoute, centerTrigger]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchor, selectedRoute, centerTrigger, bottomInset]);
 
   // curseur du profil d'altitude
   useEffect(() => {
@@ -362,7 +368,7 @@ export function RunningMap({
               type="button"
               aria-pressed={radiusKm === r}
               onClick={() => onRadiusChange(r)}
-              className={`px-2.5 py-1 text-xs font-mono tabular-nums font-medium rounded-md transition-colors cursor-pointer ${
+              className={`px-3 py-2 md:px-2.5 md:py-1 text-xs font-mono tabular-nums font-medium rounded-md transition-colors cursor-pointer ${
                 radiusKm === r
                   ? 'bg-slate-900 text-white'
                   : 'text-slate-600 hover:text-slate-900'
@@ -389,7 +395,7 @@ export function RunningMap({
               type="button"
               aria-pressed={mapType === mode.id}
               onClick={() => setMapType(mode.id)}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+              className={`px-3 py-2 md:px-2.5 md:py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
                 mapType === mode.id
                   ? 'bg-emerald-600 text-white'
                   : 'text-slate-600 hover:text-slate-900'

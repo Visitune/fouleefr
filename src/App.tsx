@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ChevronDown,
-  ChevronUp,
   Compass,
+  Loader2,
+  LocateFixed,
   Route as RouteIcon,
+  WifiOff,
   X,
 } from 'lucide-react';
+import { BottomNav } from './components/BottomNav';
 import { FilterBar } from './components/FilterBar';
+import { InstallPrompt } from './components/InstallPrompt';
 import { LoopBuilder } from './components/LoopBuilder';
 import { RouteCard } from './components/RouteCard';
 import { RouteDetail } from './components/RouteDetail';
 import { RunningMap } from './components/RunningMap';
 import { SearchBar } from './components/SearchBar';
+import { SheetHandle, type SheetState } from './components/SheetHandle';
 import { TopBar, type ActiveTab } from './components/TopBar';
+import { useMediaQuery, useOnlineStatus } from './hooks/useDeviceState';
 import type {
   LatLngPoint,
   LoopGenerationRequest,
@@ -60,7 +65,27 @@ export default function App() {
   const [isGeolocating, setIsGeolocating] = useState(false);
   const [geoNotice, setGeoNotice] = useState<string | null>(null);
   const [isGeneratingLoop, setIsGeneratingLoop] = useState(false);
-  const [mobileSheetExpanded, setMobileSheetExpanded] = useState(true);
+  const [sheetState, setSheetState] = useState<SheetState>('half');
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const isOnline = useOnlineStatus();
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [mapBottomInset, setMapBottomInset] = useState(0);
+
+  // Déplie le panneau sans jamais le réduire s'il est déjà ouvert.
+  const expandSheet = useCallback(
+    () => setSheetState((cur) => (cur === 'peek' ? 'half' : cur)),
+    []
+  );
+
+  // Partie de la carte masquée par le panneau (mobile) : sert au cadrage des tracés.
+  useEffect(() => {
+    if (!isMobile || sheetState === 'peek') {
+      setMapBottomInset(0);
+      return;
+    }
+    const h = wrapperRef.current?.clientHeight ?? 0;
+    setMapBottomInset(Math.max(0, Math.round(h * 0.55 - 64)));
+  }, [isMobile, sheetState]);
 
   // Fetch routes around anchor
   const fetchRoutesAtPoint = useCallback(
@@ -213,7 +238,7 @@ export default function App() {
           setRoutes((prev) => [data.route, ...prev]);
           setSelectedRoute(data.route);
           setActiveTab('explore');
-          setMobileSheetExpanded(true);
+          expandSheet();
         }
       } catch (err) {
         setDiscoverError(
@@ -265,13 +290,13 @@ export default function App() {
   const handleSelectRoute = useCallback((route: RunningRoute) => {
     setSelectedRoute(route);
     setElevationHoverPoint(null);
-    setMobileSheetExpanded(true);
+    expandSheet();
   }, []);
 
   const handleMapSelectRoute = useCallback((route: RunningRoute) => {
     setSelectedRoute(route);
     setActiveTab('explore');
-    setMobileSheetExpanded(true);
+    expandSheet();
   }, []);
 
   const handleCenterOnRoute = useCallback((route: RunningRoute) => {
@@ -279,96 +304,81 @@ export default function App() {
     setCenterTrigger((c) => c + 1);
   }, []);
 
+  const handleTabChange = (tab: ActiveTab) => {
+    // Un second appui sur l'onglet actif replie/déplie le panneau (mobile).
+    if (tab === activeTab && isMobile) {
+      setSheetState((cur) => (cur === 'peek' ? 'half' : 'peek'));
+      return;
+    }
+    setActiveTab(tab);
+    if (tab !== 'explore') setSelectedRoute(null);
+    expandSheet();
+  };
+
+  const sheetSummary = isLoadingRoutes && activeTab === 'explore' ? (
+    <span className="inline-flex items-center gap-2 text-slate-600">
+      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+      Recherche de parcours…
+    </span>
+  ) : activeTab === 'loop' ? (
+    <span>Créer une boucle</span>
+  ) : activeTab === 'favorites' ? (
+    <span>Favoris ({favorites.length})</span>
+  ) : selectedRoute ? (
+    <span>{selectedRoute.name}</span>
+  ) : (
+    <span>
+      {filteredExploreRoutes.length} parcours
+      <span className="font-normal text-slate-500"> · {anchorLabel}</span>
+    </span>
+  );
+
+  const SHEET_HEIGHT: Record<SheetState, string> = {
+    peek: 'h-16',
+    half: 'h-[55%]',
+    full: 'h-full',
+  };
+
   const workspaceContent = (
     <div className="flex flex-col h-full bg-white">
-      {/* Top Bar */}
+      {/* En-tête */}
       <TopBar
         activeTab={activeTab}
-        onTabChange={(tab) => {
-          setActiveTab(tab);
-          if (tab !== 'explore') setSelectedRoute(null);
-          setMobileSheetExpanded(true);
-        }}
+        onTabChange={handleTabChange}
         onGeolocate={handleGeolocate}
         isGeolocating={isGeolocating}
         favoritesCount={favorites.length}
       />
 
-      {/* Main Split Workspace */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-        {/* Sidebar (Desktop) / Bottom Drawer (Mobile) */}
+      {!isOnline && (
+        <div
+          role="status"
+          className="shrink-0 flex items-center gap-2 bg-amber-100 text-amber-950 text-xs px-4 py-2"
+        >
+          <WifiOff className="w-4 h-4 shrink-0" aria-hidden="true" />
+          <span>
+            Hors connexion : vos favoris restent consultables. La carte et le calcul
+            de parcours nécessitent Internet.
+          </span>
+        </div>
+      )}
+
+      {/* Espace de travail : mobile = carte plein écran + panneau coulissant ; bureau = 2 colonnes */}
+      <div
+        ref={wrapperRef}
+        className="flex-1 min-h-0 relative overflow-hidden md:flex md:flex-row"
+      >
+        <InstallPrompt />
+
+        {/* Panneau latéral (bureau) / panneau coulissant (mobile) */}
         <aside
           aria-label="Exploration et filtres de parcours"
-          className={`order-2 md:order-1 w-full md:w-[420px] lg:w-[450px] shrink-0 bg-white border-t md:border-t-0 md:border-r border-slate-200 flex flex-col z-20 transition-all duration-200 ${
-            mobileSheetExpanded ? 'h-[58%] md:h-full' : 'h-14 md:h-full'
-          }`}
+          className={`absolute inset-x-0 bottom-0 z-20 flex flex-col overflow-hidden bg-white rounded-t-2xl shadow-[0_-6px_24px_rgba(15,23,42,0.18)] transition-[height] duration-200 ease-out ${SHEET_HEIGHT[sheetState]} md:static md:h-full md:w-[420px] lg:w-[450px] md:shrink-0 md:rounded-none md:shadow-none md:border-r md:border-slate-200 md:order-1`}
         >
-          {/* Mobile Drawer Handle & Tab Strip */}
-          <div className="md:hidden flex items-center justify-between px-4 h-12 shrink-0 border-b border-slate-100 bg-slate-50/80">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('explore');
-                  setMobileSheetExpanded(true);
-                }}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md cursor-pointer ${
-                  activeTab === 'explore'
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-slate-700'
-                }`}
-              >
-                Explorer
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('loop');
-                  setMobileSheetExpanded(true);
-                }}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md cursor-pointer ${
-                  activeTab === 'loop'
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-slate-700'
-                }`}
-              >
-                Boucle auto
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('favorites');
-                  setMobileSheetExpanded(true);
-                }}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md cursor-pointer ${
-                  activeTab === 'favorites'
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-slate-700'
-                }`}
-              >
-                Favoris ({favorites.length})
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => setMobileSheetExpanded((v) => !v)}
-              aria-label={
-                mobileSheetExpanded
-                  ? 'Réduire le panneau'
-                  : 'Agrandir le panneau'
-              }
-              className="p-1.5 text-slate-600 cursor-pointer"
-            >
-              {mobileSheetExpanded ? (
-                <ChevronDown className="w-5 h-5" />
-              ) : (
-                <ChevronUp className="w-5 h-5" />
-              )}
-            </button>
-          </div>
+          <SheetHandle state={sheetState} onChange={setSheetState} summary={sheetSummary} />
 
           {/* Sidebar Body */}
-          <div className="flex-1 overflow-y-auto thin-scrollbar p-4 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain thin-scrollbar p-4 space-y-4">
             {geoNotice && (
               <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-start justify-between gap-2">
                 <span>{geoNotice}</span>
@@ -571,8 +581,8 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Map Viewport */}
-        <main className="order-1 md:order-2 flex-1 relative min-h-[260px] bg-slate-100">
+        {/* Carte */}
+        <main className="absolute inset-x-0 top-0 bottom-16 md:relative md:inset-auto md:bottom-auto md:flex-1 md:order-2 min-h-0 bg-slate-100">
           <RunningMap
             anchor={anchor}
             radiusKm={radiusKm}
@@ -584,14 +594,37 @@ export default function App() {
             onAnchorMove={handleAnchorMove}
             onSelectRoute={handleMapSelectRoute}
             onRadiusChange={setRadiusKm}
+            bottomInset={mapBottomInset}
           />
+
+          {/* Bouton flottant « ma position » (mobile) */}
+          <button
+            type="button"
+            onClick={handleGeolocate}
+            disabled={isGeolocating}
+            aria-label="Centrer sur ma position"
+            className="md:hidden absolute right-3 bottom-9 z-10 w-12 h-12 rounded-full bg-white border border-slate-200 shadow-lg flex items-center justify-center text-emerald-700 disabled:opacity-60 active:scale-95 cursor-pointer"
+          >
+            {isGeolocating ? (
+              <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+            ) : (
+              <LocateFixed className="w-5 h-5" aria-hidden="true" />
+            )}
+          </button>
         </main>
       </div>
+
+      {/* Navigation du bas (mobile) */}
+      <BottomNav
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        favoritesCount={favorites.length}
+      />
     </div>
   );
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-slate-50">
+    <div className="h-dvh w-full flex flex-col overflow-hidden bg-slate-50">
       {workspaceContent}
     </div>
   );

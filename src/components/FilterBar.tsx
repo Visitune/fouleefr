@@ -45,7 +45,7 @@ export function FilterBar({
         <button
           type="button"
           onClick={() => onChange({ ...filters, onlyLit: !filters.onlyLit })}
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-[36px] rounded-md text-xs font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+          className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] md:px-2.5 md:py-1.5 md:min-h-[36px] rounded-md text-sm md:text-xs font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
             filters.onlyLit
               ? 'bg-amber-50 border-amber-400 text-amber-900'
               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -58,7 +58,7 @@ export function FilterBar({
         <button
           type="button"
           onClick={() => onChange({ ...filters, onlyWater: !filters.onlyWater })}
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-[36px] rounded-md text-xs font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+          className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] md:px-2.5 md:py-1.5 md:min-h-[36px] rounded-md text-sm md:text-xs font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
             filters.onlyWater
               ? 'bg-sky-50 border-sky-400 text-sky-900'
               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -71,7 +71,7 @@ export function FilterBar({
         <button
           type="button"
           onClick={() => onChange({ ...filters, onlyFlat: !filters.onlyFlat })}
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-[36px] rounded-md text-xs font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+          className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] md:px-2.5 md:py-1.5 md:min-h-[36px] rounded-md text-sm md:text-xs font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
             filters.onlyFlat
               ? 'bg-emerald-50 border-emerald-500 text-emerald-900'
               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -84,7 +84,7 @@ export function FilterBar({
         <button
           type="button"
           onClick={() => onChange({ ...filters, onlyLoop: !filters.onlyLoop })}
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-[36px] rounded-md text-xs font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+          className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] md:px-2.5 md:py-1.5 md:min-h-[36px] rounded-md text-sm md:text-xs font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
             filters.onlyLoop
               ? 'bg-emerald-50 border-emerald-500 text-emerald-900'
               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -99,7 +99,7 @@ export function FilterBar({
           onClick={() =>
             onChange({ ...filters, onlyPracticable: !filters.onlyPracticable })
           }
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-[36px] rounded-md text-xs font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+          className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] md:px-2.5 md:py-1.5 md:min-h-[36px] rounded-md text-sm md:text-xs font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
             filters.onlyPracticable
               ? 'bg-emerald-50 border-emerald-500 text-emerald-900'
               : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -121,7 +121,7 @@ export function FilterBar({
               environment: e.target.value as EnvironmentType | 'all',
             })
           }
-          className="h-9 px-2 rounded-md border border-slate-200 bg-white text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer"
+          className="h-11 md:h-9 px-2 rounded-md border border-slate-200 bg-white text-base md:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer"
         >
           <option value="all">Cadre : Tous</option>
           <option value="ville">En ville</option>
@@ -139,7 +139,7 @@ export function FilterBar({
               terrain: e.target.value as TerrainType | 'all',
             })
           }
-          className="h-9 px-2 rounded-md border border-slate-200 bg-white text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer"
+          className="h-11 md:h-9 px-2 rounded-md border border-slate-200 bg-white text-base md:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer"
         >
           <option value="all">Terrain : Tous</option>
           <option value="bitume">Bitume</option>
@@ -157,7 +157,7 @@ export function FilterBar({
               difficulty: e.target.value as DifficultyLevel | 'all',
             })
           }
-          className="h-9 px-2 rounded-md border border-slate-200 bg-white text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer"
+          className="h-11 md:h-9 px-2 rounded-md border border-slate-200 bg-white text-base md:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer"
         >
           <option value="all">Niveau : Tous</option>
           <option value="facile">Facile</option>
@@ -174,7 +174,7 @@ export function FilterBar({
               distanceBucket: e.target.value as RouteFilters['distanceBucket'],
             })
           }
-          className="h-9 px-2 rounded-md border border-slate-200 bg-white text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer"
+          className="h-11 md:h-9 px-2 rounded-md border border-slate-200 bg-white text-base md:text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 cursor-pointer"
         >
           <option value="all">Distance : Toutes</option>
           <option value="short">Moins de 5 km</option>
@@ -193,7 +193,7 @@ export function FilterBar({
           <button
             type="button"
             onClick={() => onChange(DEFAULT_FILTERS)}
-            className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-800 font-medium cursor-pointer"
+            className="inline-flex items-center gap-1 min-h-[44px] md:min-h-0 px-2 md:px-0 text-emerald-700 hover:text-emerald-800 font-medium cursor-pointer"
           >
             <RotateCcw className="w-3 h-3" aria-hidden="true" />
             <span>Réinitialiser</span>

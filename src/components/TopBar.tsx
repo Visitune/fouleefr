@@ -18,7 +18,7 @@ export function TopBar({
   favoritesCount,
 }: TopBarProps) {
   return (
-    <header className="h-14 shrink-0 bg-white border-b border-slate-200 px-4 md:px-6 flex items-center justify-between gap-8 z-30">
+    <header className="shrink-0 bg-white border-b border-slate-200 px-4 md:px-6 pt-[env(safe-area-inset-top)] h-[calc(3.5rem+env(safe-area-inset-top))] flex items-center justify-between gap-4 md:gap-8 z-30">
       {/* Zone 1: Single-line brand wordmark */}
       <a
         href="#top"
@@ -26,15 +26,22 @@ export function TopBar({
           e.preventDefault();
           onTabChange('explore');
         }}
-        className="font-display text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 rounded-md"
+        className="font-display text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 inline-flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 rounded-md"
       >
-        Foulée France
+        <img
+          src="/icons/icon-192.png"
+          alt=""
+          width={28}
+          height={28}
+          className="w-7 h-7 rounded-md"
+        />
+        <span>Foulée France</span>
       </a>
 
       {/* Zone 2: Concise single-line navigation links */}
       <nav
         aria-label="Navigation principale"
-        className="hidden sm:flex items-center gap-6 h-full"
+        className="hidden md:flex items-center gap-6 h-full"
       >
         <button
           type="button"
@@ -77,14 +84,15 @@ export function TopBar({
           type="button"
           onClick={onGeolocate}
           disabled={isGeolocating}
-          className="inline-flex items-center gap-2 py-2 px-4 min-h-[40px] rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-60 text-white text-sm font-medium transition-all whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+          aria-label="Utiliser ma position"
+          className="inline-flex items-center justify-center gap-2 py-2 px-3 sm:px-4 min-h-[44px] min-w-[44px] md:min-h-[40px] rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-60 text-white text-sm font-medium transition-all whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
         >
           {isGeolocating ? (
             <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
           ) : (
             <LocateFixed className="w-4 h-4" aria-hidden="true" />
           )}
-          <span>Ma position</span>
+          <span className="hidden sm:inline">Ma position</span>
         </button>
       </div>
     </header>
