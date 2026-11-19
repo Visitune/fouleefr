@@ -406,9 +406,13 @@ export async function discoverRoutesAroundPoint(
   }
 
   // au plus un lieu par catégorie en priorité, pour varier les propositions
-  const pool = (places ?? []).filter(
+  // On privilégie les lieux assez éloignés (≥ 35 % du rayon) : un lieu à 400 m ne donne
+  // qu'une boucle d'1-2 km. Repli sur les plus proches s'il n'y en a pas assez.
+  const inRange = (places ?? []).filter(
     (p) => p.distanceKm >= 0.25 && p.distanceKm <= radiusKm
   );
+  const far = inRange.filter((p) => p.distanceKm >= radiusKm * 0.35);
+  const pool = far.length >= 2 ? far : inRange;
   const picked: OsmPlace[] = [];
   for (const cat of ['park', 'water', 'trail'] as const) {
     const p = pool.find((x) => x.category === cat && !picked.includes(x));

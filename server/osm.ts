@@ -7,8 +7,11 @@ import type {
 import { distanceToSegmentM, haversineKm, simplifyIndices } from './geo.ts';
 import { TtlCache, fetchWithTimeout } from './http.ts';
 
+// Miroirs interrogés en parallèle : le premier qui répond l'emporte.
 const OVERPASS_ENDPOINTS = [
+  'https://overpass.openstreetmap.fr/api/interpreter',
   'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
 ];
 
@@ -81,16 +84,17 @@ export async function findPlaces(
   if (hit) return hit;
 
   const around = `(around:${r},${lat.toFixed(5)},${lng.toFixed(5)})`;
-  const query = `[out:json][timeout:20];
+  // Requête volontairement légère : `nwr` (tous types d'objets) et la recherche de voies
+  // vertes dépassaient le délai des serveurs (>20 s, réponse vide) sur un rayon de 5 km.
+  const query = `[out:json][timeout:12];
 (
-  nwr["leisure"~"^(park|nature_reserve)$"]["name"]${around};
-  nwr["landuse"="forest"]["name"]${around};
-  nwr["natural"="wood"]["name"]${around};
+  way["leisure"~"^(park|nature_reserve)$"]["name"]${around};
+  rel["leisure"~"^(park|nature_reserve)$"]["name"]${around};
+  way["landuse"="forest"]["name"]${around};
   way["waterway"~"^(river|canal)$"]["name"]${around};
-  nwr["natural"="water"]["name"]${around};
-  way["highway"~"^(cycleway|footway|path)$"]["name"]["surface"]${around};
+  way["natural"="water"]["name"]["water"~"^(lake|reservoir|river|canal|lagoon|oxbow)$"]${around};
 );
-out tags center 120;`;
+out tags center 300;`;
 
   const elements = await overpass(query);
   if (!elements) return null;
@@ -104,6 +108,8 @@ out tags center 120;`;
     const pLat = c?.lat;
     const pLng = c?.lon;
     if (!name || pLat === undefined || pLng === undefined) continue;
+    // fontaines, bassins et miroirs d'eau décoratifs : pas des cours d'eau où courir
+    if (/\b(fontaine|bassin|miroir d'eau|pi[eè]ce d'eau|jet d'eau)\b/i.test(name)) continue;
 
     let category: OsmPlace['category'];
     if (t.waterway || t.natural === 'water') category = 'water';
@@ -273,10 +279,11 @@ way["highway"](around:20,${poly})->.h;
 .h out tags geom;
 (
   way["waterway"~"^(river|canal)$"]["name"](around:60,${poly});
-  way["natural"="water"]["name"](around:60,${poly});
-  nwr["leisure"~"^(park|nature_reserve)$"]["name"](around:10,${poly});
-  nwr["landuse"="forest"]["name"](around:10,${poly});
-  nwr["natural"="wood"]["name"](around:10,${poly});
+  way["natural"="water"]["name"]["water"~"^(lake|reservoir|river|canal|lagoon|oxbow)$"](around:60,${poly});
+  way["leisure"~"^(park|nature_reserve)$"]["name"](around:10,${poly});
+  rel["leisure"~"^(park|nature_reserve)$"]["name"](around:10,${poly});
+  way["landuse"="forest"]["name"](around:10,${poly});
+  way["natural"="wood"]["name"](around:10,${poly});
 );
 out tags;`;
 
@@ -303,6 +310,7 @@ out tags;`;
       continue;
     }
     if (!t.name) continue;
+    if (/\b(fontaine|bassin|miroir d'eau|pi[eè]ce d'eau|jet d'eau)\b/i.test(t.name)) continue;
     if (t.waterway || t.natural === 'water') waterName ??= t.name;
     else if (t.landuse === 'forest' || t.natural === 'wood') forestName ??= t.name;
     else if (t.leisure) parkName ??= t.name;
@@ -378,11 +386,14 @@ out tags;`;
   }
 
   const urbanShare = urban / matched;
-  const natureShare = (nature + greenway) / matched;
+  // `footway` / `cycleway` désignent aussi les trottoirs et pistes en pleine ville :
+  // ils comptent pour un parc ou une forêt nommé(e), jamais pour la « campagne ».
+  const pathShare = (nature + greenway) / matched;
+  const trailShare = nature / matched; // path, track, bridleway uniquement
   let environment: EnvironmentType = 'ville';
-  if (forestName && natureShare >= 0.3) environment = 'foret';
-  else if (parkName && natureShare >= 0.3) environment = 'parc';
-  else if (natureShare >= 0.6 && urbanShare < 0.3) environment = 'campagne';
+  if (forestName && pathShare >= 0.3) environment = 'foret';
+  else if (parkName && pathShare >= 0.3) environment = 'parc';
+  else if (trailShare >= 0.6 && urbanShare < 0.3) environment = 'campagne';
 
   const dangerM = dangerSamples * SAMPLE_STEP_M;
   const stairsM = stairsSamples * SAMPLE_STEP_M;
