@@ -1,24 +1,17 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import '@fontsource/outfit/500.css';
+import '@fontsource/outfit/600.css';
+import '@fontsource/outfit/700.css';
+import '@fontsource/plus-jakarta-sans/400.css';
+import '@fontsource/plus-jakarta-sans/500.css';
+import '@fontsource/plus-jakarta-sans/600.css';
+import '@fontsource/plus-jakarta-sans/700.css';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
+import '@fontsource/jetbrains-mono/600.css';
 import App from './App.tsx';
 import './index.css';
-
-// Tier 1 Google Maps Platform Demo Key Quota Defense
-(window as unknown as { gm_authFailure?: () => void }).gm_authFailure = () => {
-  window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
-};
-
-const origError = console.error;
-console.error = (...args: unknown[]) => {
-  origError.apply(console, args);
-  const msg = args.map((a) => String(a)).join(' ');
-  if (
-    msg.includes('OverQuotaMapError') ||
-    msg.includes('QuotaExceededError')
-  ) {
-    window.dispatchEvent(new CustomEvent('gmp-quota-exceeded'));
-  }
-};
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

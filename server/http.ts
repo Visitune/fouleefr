@@ -62,6 +62,22 @@ export class TtlCache<T> {
   }
 }
 
+/**
+ * Espace les appels d'au moins `gapMs` (file d'attente en mémoire).
+ * Nominatim impose au plus 1 requête par seconde pour l'ensemble de l'application.
+ */
+export class Throttle {
+  private next = 0;
+  constructor(private gapMs: number) {}
+
+  async wait(): Promise<void> {
+    const now = Date.now();
+    const slot = Math.max(now, this.next);
+    this.next = slot + this.gapMs;
+    if (slot > now) await new Promise((r) => setTimeout(r, slot - now));
+  }
+}
+
 /** Limiteur de débit en mémoire (fenêtre glissante, par clé). */
 export class RateLimiter {
   private hits = new Map<string, number[]>();

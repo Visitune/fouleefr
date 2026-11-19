@@ -7,6 +7,7 @@ import type {
   RunningRoute,
 } from '../src/types/route.ts';
 import { measureElevation } from './elevation.ts';
+import { nominatimGate } from './geocode.ts';
 import {
   bearingDeg,
   haversineKm,
@@ -33,6 +34,7 @@ export async function reverseGeocodeFrance(
   const cached = cityCache.get(key);
   if (cached !== undefined) return cached;
   try {
+    await nominatimGate.wait();
     const res = await fetchWithTimeout(
       `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat.toFixed(5)}&lon=${lng.toFixed(5)}&zoom=15&accept-language=fr`,
       {},

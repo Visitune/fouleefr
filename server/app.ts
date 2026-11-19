@@ -1,6 +1,7 @@
 import express from 'express';
 import net from 'net';
 import { z } from 'zod';
+import { searchPlacesFrance } from './geocode.ts';
 import { RateLimiter, UpstreamError, fetchWithTimeout } from './http.ts';
 import { discoverRoutesAroundPoint, generateSmartLoop } from './routesEngine.ts';
 
@@ -12,6 +13,10 @@ const discoverQuery = z.object({
   lat: LAT,
   lng: LNG,
   radiusKm: z.coerce.number().min(1).max(10).default(5),
+});
+
+const geocodeQuery = z.object({
+  q: z.string().trim().min(3).max(120),
 });
 
 const loopBody = z.object({
@@ -63,12 +68,19 @@ export function createApp() {
     res.json({ ok: true });
   });
 
-  app.get('/api/config', (_req, res) => {
-    // Clé Google Maps JS : publique par nature. Restreignez-la par référent HTTP côté Google.
-    res.json({
-      mapsApiKey:
-        process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || '',
-    });
+  // Recherche d'un lieu (validée par l'utilisateur : Nominatim interdit l'autocomplétion à la frappe).
+  app.get('/api/geocode', limit, async (req, res) => {
+    const parsed = geocodeQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Saisissez au moins 3 caractères.' });
+      return;
+    }
+    const results = await searchPlacesFrance(parsed.data.q);
+    if (!results) {
+      res.status(502).json({ error: 'Le service de recherche d’adresse est indisponible.' });
+      return;
+    }
+    res.json({ results });
   });
 
   app.get('/api/ip-location', limit, async (req, res) => {

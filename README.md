@@ -20,7 +20,6 @@ Limites : OpenStreetMap est contributif. Un éclairage ou un revêtement manquan
 
 ```bash
 npm install
-cp .env.example .env.local   # renseigner VITE_GOOGLE_MAPS_API_KEY
 npm run dev                  # http://localhost:3000
 npm test                     # tests unitaires
 npm run lint                 # vérification TypeScript (strict)
@@ -28,21 +27,21 @@ npm run lint                 # vérification TypeScript (strict)
 
 ## Architecture
 
-- `src/` : interface React 19 + Tailwind 4 + Google Maps.
-- `server/app.ts` : API Express (validation `zod`, limitation de débit 30 req/min/IP, emprise France).
+- `src/` : interface React 19 + Tailwind 4 + Leaflet (fonds OpenStreetMap / OpenTopoMap, aucune clé requise).
+- `server/app.ts` : API Express (validation `zod`, limitation de débit 30 req/min/IP, emprise France) ; `server/geocode.ts` : recherche d'adresse Nominatim (≤ 1 requête/s, validée par l'utilisateur, sans autocomplétion à la frappe).
 - `server/routesEngine.ts` : construction des parcours ; `server/osm.ts` : Overpass ; `server/elevation.ts` : altitudes ; `server/geo.ts` : géométrie ; `server/http.ts` : timeouts, cache, limiteur.
 - `api/index.ts` : point d'entrée serverless Vercel (`vercel.json` réécrit `/api/*`).
 
 ## Déploiement Vercel
 
 1. Importer le dépôt GitHub dans Vercel (framework : Vite, détecté automatiquement).
-2. Variables d'environnement : `VITE_GOOGLE_MAPS_API_KEY`, `APP_CONTACT`.
-3. Dans Google Cloud, restreindre la clé Maps aux référents `https://<votre-domaine>/*`.
+2. Variable d'environnement (facultative) : `APP_CONTACT` (e-mail ou URL du dépôt, transmis aux services OpenStreetMap).
+3. Aucune clé d'API ni compte de facturation n'est nécessaire.
 
 Le cache et le limiteur de débit sont en mémoire (par instance serverless) : suffisant pour un trafic modéré, à remplacer par un stockage partagé (Redis/KV) en cas de forte charge.
 
 ## Services tiers et vie privée
 
-OpenStreetMap (Overpass, Nominatim, routage), Open-Meteo, Google Maps/Places/Fonts, ipwho.is (repli de géolocalisation : l'adresse IP du visiteur lui est transmise uniquement si le GPS du navigateur est refusé). Les favoris et signalements restent dans le `localStorage` du navigateur.
+OpenStreetMap (fonds de carte, Overpass, Nominatim, routage), OpenTopoMap (fond Relief), Open-Meteo, ipwho.is (repli de géolocalisation : l'adresse IP du visiteur lui est transmise uniquement si le GPS du navigateur est refusé). Les polices sont embarquées (aucun appel à Google). Les favoris et signalements restent dans le `localStorage` du navigateur.
 
 Données © contributeurs OpenStreetMap, licence ODbL.

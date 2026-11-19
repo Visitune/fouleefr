@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { APIProvider } from '@vis.gl/react-google-maps';
 import {
   ChevronDown,
   ChevronUp,
   Compass,
-  Loader2,
   Route as RouteIcon,
   X,
 } from 'lucide-react';
@@ -34,14 +32,6 @@ import {
 const DEFAULT_PARIS_ANCHOR: LatLngPoint = { lat: 48.8588, lng: 2.2945 };
 
 export default function App() {
-  const [mapsApiKey, setMapsApiKey] = useState<string>(
-    () => import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''
-  );
-  const [configLoaded, setConfigLoaded] = useState<boolean>(
-    Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY)
-  );
-  const [quotaExceeded, setQuotaExceeded] = useState(false);
-
   const [activeTab, setActiveTab] = useState<ActiveTab>('explore');
   const [anchor, setAnchor] = useState<LatLngPoint>(DEFAULT_PARIS_ANCHOR);
   const [anchorLabel, setAnchorLabel] = useState<string>('Paris — Champ-de-Mars');
@@ -71,30 +61,6 @@ export default function App() {
   const [geoNotice, setGeoNotice] = useState<string | null>(null);
   const [isGeneratingLoop, setIsGeneratingLoop] = useState(false);
   const [mobileSheetExpanded, setMobileSheetExpanded] = useState(true);
-
-  // Listen for Google Maps quota-exceeded custom event
-  useEffect(() => {
-    const onQuota = () => setQuotaExceeded(true);
-    window.addEventListener('gmp-quota-exceeded', onQuota);
-    return () => window.removeEventListener('gmp-quota-exceeded', onQuota);
-  }, []);
-
-  // Load Maps API key from backend config if not injected into Vite env
-  useEffect(() => {
-    if (mapsApiKey) {
-      setConfigLoaded(true);
-      return;
-    }
-    fetch('/api/config')
-      .then((res) => res.json())
-      .then((data: { mapsApiKey?: string }) => {
-        if (data.mapsApiKey) setMapsApiKey(data.mapsApiKey);
-      })
-      .catch(() => {
-        // Ignore config error
-      })
-      .finally(() => setConfigLoaded(true));
-  }, [mapsApiKey]);
 
   // Fetch routes around anchor
   const fetchRoutesAtPoint = useCallback(
@@ -302,6 +268,12 @@ export default function App() {
     setMobileSheetExpanded(true);
   }, []);
 
+  const handleMapSelectRoute = useCallback((route: RunningRoute) => {
+    setSelectedRoute(route);
+    setActiveTab('explore');
+    setMobileSheetExpanded(true);
+  }, []);
+
   const handleCenterOnRoute = useCallback((route: RunningRoute) => {
     setSelectedRoute(route);
     setCenterTrigger((c) => c + 1);
@@ -455,7 +427,6 @@ export default function App() {
                 <SearchBar
                   onSelectLocation={(pt, label) => handleAnchorMove(pt, label)}
                   anchorLabel={anchorLabel}
-                  mapsEnabled={Boolean(mapsApiKey)}
                 />
                 <LoopBuilder
                   anchor={anchor}
@@ -515,7 +486,6 @@ export default function App() {
                 <SearchBar
                   onSelectLocation={(pt, label) => handleAnchorMove(pt, label)}
                   anchorLabel={anchorLabel}
-                  mapsEnabled={Boolean(mapsApiKey)}
                 />
 
                 <FilterBar
@@ -603,40 +573,18 @@ export default function App() {
 
         {/* Map Viewport */}
         <main className="order-1 md:order-2 flex-1 relative min-h-[260px] bg-slate-100">
-          {!configLoaded ? (
-            <div className="w-full h-full flex items-center justify-center text-sm text-slate-600 gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Initialisation de la carte...</span>
-            </div>
-          ) : !mapsApiKey ? (
-            <div className="w-full h-full flex items-center justify-center p-6 text-center">
-              <div className="max-w-md rounded-lg border border-slate-200 bg-white p-6 space-y-2">
-                <h2 className="font-display text-base font-semibold text-slate-900">
-                  Clé Google Maps Platform requise
-                </h2>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Configurez <code className="font-mono">VITE_GOOGLE_MAPS_API_KEY</code> dans les paramètres de votre application pour activer la carte interactive.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <RunningMap
-              anchor={anchor}
-              radiusKm={radiusKm}
-              routes={mapVisibleRoutes}
-              selectedRoute={selectedRoute}
-              hoveredRouteId={hoveredRouteId}
-              elevationHoverPoint={elevationHoverPoint}
-              centerTrigger={centerTrigger}
-              onAnchorMove={(pt) => handleAnchorMove(pt)}
-              onSelectRoute={(r) => {
-                setSelectedRoute(r);
-                setActiveTab('explore');
-                setMobileSheetExpanded(true);
-              }}
-              onRadiusChange={(km) => setRadiusKm(km)}
-            />
-          )}
+          <RunningMap
+            anchor={anchor}
+            radiusKm={radiusKm}
+            routes={mapVisibleRoutes}
+            selectedRoute={selectedRoute}
+            hoveredRouteId={hoveredRouteId}
+            elevationHoverPoint={elevationHoverPoint}
+            centerTrigger={centerTrigger}
+            onAnchorMove={handleAnchorMove}
+            onSelectRoute={handleMapSelectRoute}
+            onRadiusChange={setRadiusKm}
+          />
         </main>
       </div>
     </div>
@@ -644,27 +592,7 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-slate-50">
-      {quotaExceeded && (
-        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
-          <span>
-            Quota Google Maps Platform atteint : la carte et la recherche
-            d’adresse peuvent être indisponibles temporairement.
-          </span>
-        </div>
-      )}
-
-      {mapsApiKey ? (
-        <APIProvider
-          apiKey={mapsApiKey}
-          language="fr"
-          region="FR"
-          libraries={['places', 'marker', 'maps']}
-        >
-          {workspaceContent}
-        </APIProvider>
-      ) : (
-        workspaceContent
-      )}
+      {workspaceContent}
     </div>
   );
 }

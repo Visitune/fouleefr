@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
-    "types": ["vite/client", "google.maps", "node"],
+    "types": ["vite/client", "node"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -14,5 +14,5 @@
     "noEmit": true
   },
   "include": ["src", "server", "api", "server.ts", "vite.config.ts", "tests"],
-  "exclude": ["dist", "node_modules", "server/frenchSpots.ts"]
+  "exclude": ["dist", "node_modules"]
 }
