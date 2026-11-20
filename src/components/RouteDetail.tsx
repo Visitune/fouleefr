@@ -27,6 +27,7 @@ import {
   exportRouteToGpx,
   formatDistanceKm,
   formatDurationMin,
+  straightnessInfo,
 } from '../utils/formatters';
 import { ElevationChart } from './ElevationChart';
 
@@ -71,6 +72,7 @@ export function RouteDetail({
       ? 'Boucle calculée sur le réseau piéton OpenStreetMap'
       : 'Parcours calculé via un lieu OpenStreetMap';
   const dq = route.dataQuality;
+  const straight = straightnessInfo(route.turnsPerKm);
 
   const handleReportSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,6 +257,23 @@ export function RouteDetail({
 
       {/* Detailed Attributes Grid */}
       <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 text-xs">
+        {straight && (
+          <div className="grid grid-cols-2 p-3 gap-2">
+            <span className="text-slate-500">Tracé</span>
+            <span className="font-medium text-slate-900 text-right">
+              {straight.label} · {String(route.turnsPerKm).replace('.', ',')} virages/km
+            </span>
+          </div>
+        )}
+        {route.greenwayPct !== undefined && route.urbanStreetPct !== undefined && (
+          <div className="grid grid-cols-2 p-3 gap-2">
+            <span className="text-slate-500">Voies</span>
+            <span className="font-medium text-slate-900 text-right">
+              {route.greenwayPct} % chemins &amp; voies vertes · {route.urbanStreetPct} % rues
+              {route.cobblePct ? ` · ${route.cobblePct} % pavés` : ''}
+            </span>
+          </div>
+        )}
         <div className="grid grid-cols-2 p-3 gap-2">
           <span className="text-slate-500">Type de terrain</span>
           <span className="font-medium text-slate-900 text-right">

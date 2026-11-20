@@ -4,7 +4,7 @@ import type {
   LightingStatus,
   TerrainType,
 } from '../src/types/route.ts';
-import { distanceToSegmentM, haversineKm, simplifyIndices } from './geo.ts';
+import { distanceToSegmentM, haversineKm, resampleByDistance, simplifyIndices } from './geo.ts';
 import { TtlCache, fetchWithTimeout } from './http.ts';
 
 // Miroirs interrogés en parallèle : le premier qui répond l'emporte.
@@ -150,6 +150,12 @@ export interface PathAnalysis {
   lighting: LightingStatus;
   surfaceCoveragePct: number;
   terrain: TerrainType;
+  /** Part (0-100) du tracé sur chemins, pistes, voies vertes (hors trottoirs et passages piétons). */
+  greenwayPct: number;
+  /** Part (0-100) du tracé dans des rues ordinaires (résidentielles, piétonnes, de service…). */
+  urbanStreetPct: number;
+  /** Part (0-100) du tracé sur pavés / cobbles (typique des centres anciens). */
+  cobblePct: number;
   environment: EnvironmentType;
   alongWater: boolean;
   waterName?: string;
@@ -195,30 +201,6 @@ interface WayGeom {
 const analysisCache = new TtlCache<PathAnalysis>(3 * 3600_000, 200);
 const SAMPLE_STEP_M = 40;
 const MATCH_MAX_M = 25;
-
-function resampleByDistance(path: LatLngPoint[], stepM: number): LatLngPoint[] {
-  if (path.length === 0) return [];
-  const out: LatLngPoint[] = [path[0]];
-  let carry = 0;
-  for (let i = 1; i < path.length; i++) {
-    let segM = haversineKm(path[i - 1], path[i]) * 1000;
-    if (segM === 0) continue;
-    let from = path[i - 1];
-    while (carry + segM >= stepM) {
-      const t = (stepM - carry) / segM;
-      const p = {
-        lat: from.lat + (path[i].lat - from.lat) * t,
-        lng: from.lng + (path[i].lng - from.lng) * t,
-      };
-      out.push(p);
-      from = p;
-      segM = haversineKm(from, path[i]) * 1000;
-      carry = 0;
-    }
-    carry += segM;
-  }
-  return out;
-}
 
 function nearestWay(p: LatLngPoint, ways: WayGeom[]): WayGeom | null {
   const dLat = MATCH_MAX_M / 111320;
@@ -268,14 +250,14 @@ function isLitTag(v: string | undefined): boolean | null {
 export async function analyzePath(path: LatLngPoint[]): Promise<PathAnalysis | null> {
   if (path.length < 2) return null;
 
-  const idx = simplifyIndices(path, 80);
+  const idx = simplifyIndices(path, 40);
   const poly = idx.map((i) => `${path[i].lat.toFixed(5)},${path[i].lng.toFixed(5)}`).join(',');
   const key = poly;
   const hit = analysisCache.get(key);
   if (hit) return hit;
 
   const query = `[out:json][timeout:25];
-way["highway"](around:20,${poly})->.h;
+way["highway"](around:28,${poly})->.h;
 .h out tags geom;
 (
   way["waterway"~"^(river|canal)$"]["name"](around:60,${poly});
@@ -328,6 +310,8 @@ out tags;`;
   let urban = 0;
   let nature = 0;
   let greenway = 0;
+  let greenFoot = 0;
+  let cobble = 0;
   let dangerSamples = 0;
   let stairsSamples = 0;
   const wayLen = new Map<string, number>();
@@ -351,9 +335,25 @@ out tags;`;
       surfCount[sc]++;
     }
 
-    if (URBAN_HIGHWAYS.has(hw)) urban++;
+    // En OSM, les trottoirs et passages piétons sont des `footway` séparés de la chaussée :
+    // marcher sur un trottoir, c'est marcher dans une rue ordinaire, pas sur une voie verte.
+    const isSidewalk = t.footway === 'sidewalk' || t.footway === 'crossing' || t.footway === 'access_aisle';
+    if (URBAN_HIGHWAYS.has(hw) || (hw === 'footway' && isSidewalk)) urban++;
     else if (NATURE_HIGHWAYS.has(hw)) nature++;
     else if (GREENWAY_HIGHWAYS.has(hw)) greenway++;
+
+    // « voie verte » : chemins, pistes et pistes cyclables ; un footway ne compte que s'il n'est
+    // ni un trottoir ni un passage piéton.
+    if (
+      NATURE_HIGHWAYS.has(hw) ||
+      hw === 'cycleway' ||
+      (hw === 'footway' && !isSidewalk)
+    ) {
+      greenFoot++;
+    }
+    if (t.surface === 'sett' || t.surface === 'cobblestone' || t.surface === 'unhewn_cobblestone') {
+      cobble++;
+    }
 
     const noSidewalk =
       !t.sidewalk && !t.footway && (hw === 'primary' || hw === 'secondary' || hw === 'trunk');
@@ -441,6 +441,9 @@ out tags;`;
     lighting,
     surfaceCoveragePct,
     terrain,
+    greenwayPct: Math.round((greenFoot / matched) * 100),
+    urbanStreetPct: Math.round((urban / matched) * 100),
+    cobblePct: Math.round((cobble / matched) * 100),
     environment,
     alongWater: Boolean(waterName),
     waterName,

@@ -128,3 +128,153 @@ export function simplifyIndices(path: LatLngPoint[], maxPoints: number): number[
   }
   return best;
 }
+
+/** Rééchantillonne un tracé à pas régulier (en mètres). */
+export function resampleByDistance(path: LatLngPoint[], stepM: number): LatLngPoint[] {
+  if (path.length === 0) return [];
+  const out: LatLngPoint[] = [path[0]];
+  let carry = 0;
+  for (let i = 1; i < path.length; i++) {
+    let segM = haversineKm(path[i - 1], path[i]) * 1000;
+    if (segM === 0) continue;
+    let from = path[i - 1];
+    while (carry + segM >= stepM) {
+      const t = (stepM - carry) / segM;
+      const p = {
+        lat: from.lat + (path[i].lat - from.lat) * t,
+        lng: from.lng + (path[i].lng - from.lng) * t,
+      };
+      out.push(p);
+      from = p;
+      segM = haversineKm(from, path[i]) * 1000;
+      carry = 0;
+    }
+    carry += segM;
+  }
+  return out;
+}
+
+export interface TurnMetrics {
+  /** Virage cumulé par km (°/km) : ~0 = ligne droite, élevé = tracé sinueux. */
+  degPerKm: number;
+  /** Nombre de virages marqués (≥ 35° sur 40 m) par km. */
+  turnsPerKm: number;
+}
+
+/**
+ * Mesure la rectitude d'un tracé. Le tracé est rééchantillonné tous les 40 m pour ignorer
+ * le bruit de la géométrie OSM, puis on cumule les changements de cap.
+ * Une boucle fermée vaut au minimum 360° au total (≈ 360 / longueur en km, par km).
+ */
+export function turnMetrics(path: LatLngPoint[], stepM = 40): TurnMetrics {
+  const pts = resampleByDistance(path, stepM);
+  if (pts.length < 3) return { degPerKm: 0, turnsPerKm: 0 };
+  let total = 0;
+  let turns = 0;
+  let prev = bearingDeg(pts[0], pts[1]);
+  for (let i = 2; i < pts.length; i++) {
+    const h = bearingDeg(pts[i - 1], pts[i]);
+    const d = Math.abs(((h - prev + 540) % 360) - 180);
+    total += d;
+    if (d >= 35) turns++;
+    prev = h;
+  }
+  const km = ((pts.length - 1) * stepM) / 1000;
+  return { degPerKm: total / km, turnsPerKm: turns / km };
+}
+
+/**
+ * Choisit des indices espacés d'au moins `minStepKm` (distance cumulée `cumKm`), au plus
+ * `maxPoints`, en gardant toujours le premier et le dernier point.
+ */
+export function sampleIndicesByDistance(
+  cumKm: number[],
+  minStepKm: number,
+  maxPoints: number
+): number[] {
+  const n = cumKm.length;
+  if (n <= 2) return cumKm.map((_, i) => i);
+  const total = cumKm[n - 1];
+  const step = Math.max(minStepKm, total / Math.max(1, maxPoints - 4));
+  const idx = [0];
+  let last = 0;
+  for (let i = 1; i < n - 1; i++) {
+    if (cumKm[i] - cumKm[last] >= step) {
+      idx.push(i);
+      last = i;
+    }
+  }
+  idx.push(n - 1);
+  return idx;
+}
+
+/**
+ * Recouvrement (0-1) : part du tracé qui repasse à moins de `radiusM` d'un point déjà parcouru
+ * au moins `minGapM` plus tôt. Un aller-retour pur vaut ≈ 0,5 (le retour recouvre l'aller),
+ * une boucle propre ≈ 0. Mesure inspirée de la notation de routess (ADR 0029), où l'aller-retour
+ * est le défaut n°1 des boucles générées.
+ */
+export function overlapFraction(
+  path: LatLngPoint[],
+  stepM = 30,
+  radiusM = 18,
+  minGapM = 250
+): number {
+  const pts = resampleByDistance(path, stepM);
+  const n = pts.length;
+  if (n < 8) return 0;
+
+  const kLat = 111320;
+  const kLng = 111320 * Math.cos((pts[0].lat * Math.PI) / 180);
+  const xy = pts.map((p) => [p.lng * kLng, p.lat * kLat] as const);
+  const gapSteps = Math.ceil(minGapM / stepM);
+  const cell = radiusM;
+
+  const grid = new Map<string, number[]>();
+  let overlapping = 0;
+  for (let i = 0; i < n; i++) {
+    const [x, y] = xy[i];
+    const cx = Math.floor(x / cell);
+    const cy = Math.floor(y / cell);
+    let hit = false;
+    for (let dx = -1; dx <= 1 && !hit; dx++) {
+      for (let dy = -1; dy <= 1 && !hit; dy++) {
+        const list = grid.get(`${cx + dx},${cy + dy}`);
+        if (!list) continue;
+        for (const j of list) {
+          if (i - j >= gapSteps && Math.hypot(x - xy[j][0], y - xy[j][1]) <= radiusM) {
+            hit = true;
+            break;
+          }
+        }
+      }
+    }
+    if (hit) overlapping++;
+    const k = `${cx},${cy}`;
+    const bucket = grid.get(k);
+    if (bucket) bucket.push(i);
+    else grid.set(k, [i]);
+  }
+  return overlapping / n;
+}
+
+/**
+ * Compacité de la boucle : quotient isopérimétrique 4πA/P² (cercle = 1, carré ≈ 0,79,
+ * triangle équilatéral ≈ 0,60, aller-retour dégénéré ≈ 0). Écarte les formes en « languette ».
+ */
+export function shapeCompactness(path: LatLngPoint[]): number {
+  const pts = resampleByDistance(path, 100);
+  if (pts.length < 4) return 0;
+  const kx = Math.cos((pts[0].lat * Math.PI) / 180);
+  const q = pts.map((p) => [p.lng * kx, p.lat] as const);
+  let area2 = 0;
+  let perimeter = 0;
+  for (let i = 0; i < q.length; i++) {
+    const [x1, y1] = q[i];
+    const [x2, y2] = q[(i + 1) % q.length];
+    area2 += x1 * y2 - x2 * y1;
+    perimeter += Math.hypot(x2 - x1, y2 - y1);
+  }
+  if (perimeter <= 0) return 0;
+  return Math.min(1, (4 * Math.PI * (Math.abs(area2) / 2)) / (perimeter * perimeter));
+}

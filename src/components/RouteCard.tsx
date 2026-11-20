@@ -14,6 +14,7 @@ import {
   PRACTICABILITY_LABELS,
   TERRAIN_LABELS,
   formatDistanceKm,
+  straightnessInfo,
 } from '../utils/formatters';
 
 interface RouteCardProps {
@@ -35,6 +36,7 @@ export function RouteCard({
   onHover,
   onToggleFavorite,
 }: RouteCardProps) {
+  const straight = straightnessInfo(route.turnsPerKm);
   const effectiveLighting = report?.lightingOverride ?? route.lighting;
   const effectivePracticable = report
     ? report.practicability === 'praticable'
@@ -91,6 +93,22 @@ export function RouteCard({
             <span>{TERRAIN_LABELS[route.terrain]}</span>
             <span aria-hidden="true">·</span>
             <span>{ENVIRONMENT_LABELS[route.environment]}</span>
+            {straight && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span
+                  className={
+                    straight.tone === 'good'
+                      ? 'text-emerald-700 font-medium'
+                      : straight.tone === 'bad'
+                        ? 'text-amber-800'
+                        : ''
+                  }
+                >
+                  {straight.label}
+                </span>
+              </>
+            )}
             {route.distanceFromAnchorKm !== undefined &&
               route.distanceFromAnchorKm > 0.1 && (
                 <>

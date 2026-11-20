@@ -38,11 +38,29 @@ Mise en page mobile (< 768 px) : carte plein écran, panneau coulissant (glisser
 
 Les icônes sont générées par `node scripts/make-icons.mjs` (sans dépendance) dans `public/icons/`. Le service worker est `public/sw.js` ; incrémentez `VERSION` pour forcer le renouvellement du cache.
 
+## Qualité des tracés (boucles directes, peu de ruelles)
+
+Le routeur seul donne le plus court chemin, sans notion de « beau parcours ». Les boucles sont donc générées par un **pipeline de candidats notés** : 6 caps × 2 formes (triangle à grands côtés, quadrilatère), puis le meilleur est retenu d'après :
+
+| Critère | Mesure | Source |
+|---|---|---|
+| Pas d'aller-retour | part du tracé qui repasse sur lui-même (`overlapFraction`) | géométrie |
+| Distance | cloche autour de la cible (±10 % = parfait) | routage |
+| Rectitude | virage cumulé par km (`turnMetrics`) | géométrie |
+| Forme | compacité 4πA/P² (écarte les « languettes ») | géométrie |
+| Caractère | voies dédiées, chaussée partagée, pavés, routes à fort trafic, escaliers | Valhalla `trace_attributes` |
+
+Constat mesuré : aucune option de coût de Valhalla (`maneuver_penalty`, `alley_factor`, `use_living_streets`, `walkway_factor`) ne rend les tracés plus directs (413 °/km en moyenne par défaut, 413 à 462 avec ces options) ; le levier réel est le **choix des points de passage et la sélection**. Overpass (éclairage, parcs, cours d'eau) n'est interrogé que pour le parcours retenu.
+
+Routage : `routing.openstreetmap.de` (OSRM, profil piéton) puis Valhalla `valhalla1.openstreetmap.de` en secours, avec cadence limitée et disjoncteur de 45 s : ce sont des instances communautaires gratuites, à ne pas marteler.
+
+L'approche « candidats notés, recouvrement en critère n°1 » s'inspire de [routess](https://github.com/robbeverhelst/routess) (MIT), ADR 0029.
+
 ## Architecture
 
 - `src/` : interface React 19 + Tailwind 4 + Leaflet (fonds OpenStreetMap / OpenTopoMap, aucune clé requise).
 - `server/app.ts` : API Express (validation `zod`, limitation de débit 30 req/min/IP, emprise France) ; `server/geocode.ts` : recherche d'adresse Nominatim (≤ 1 requête/s, validée par l'utilisateur, sans autocomplétion à la frappe).
-- `server/routesEngine.ts` : construction des parcours ; `server/osm.ts` : Overpass ; `server/elevation.ts` : altitudes ; `server/geo.ts` : géométrie ; `server/http.ts` : timeouts, cache, limiteur.
+- `server/routesEngine.ts` : construction et notation des parcours ; `server/routing.ts` : routage (OSRM + Valhalla) et `trace_attributes` ; `server/osm.ts` : Overpass ; `server/elevation.ts` : altitudes ; `server/geo.ts` : géométrie ; `server/http.ts` : timeouts, cache, limiteur.
 - `api/index.ts` : point d'entrée serverless Vercel (`vercel.json` réécrit `/api/*`).
 
 ## Déploiement Vercel

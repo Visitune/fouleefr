@@ -57,6 +57,16 @@ export interface RunningRoute {
   /** false uniquement si OSM signale un obstacle (escaliers, axe rapide, accès interdit). */
   practicable: boolean;
   litPercentage?: number;
+  /** Virage cumulé par km (°/km) : plus c'est bas, plus le tracé est direct. */
+  windinessDegPerKm?: number;
+  /** Virages marqués (≥ 35° sur 40 m) par km. */
+  turnsPerKm?: number;
+  /** Part (0-100) du tracé sur chemins, pistes et voies vertes (étiquettes OSM). */
+  greenwayPct?: number;
+  /** Part (0-100) du tracé dans des rues ordinaires. */
+  urbanStreetPct?: number;
+  /** Part (0-100) du tracé sur pavés (centres anciens). */
+  cobblePct?: number;
   surfaceSummary?: string;
   safetyNotes?: string[];
   description: string;

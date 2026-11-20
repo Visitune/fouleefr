@@ -65,6 +65,20 @@ export const PRACTICABILITY_LABELS: Record<PracticabilityStatus, string> = {
   travaux: 'Travaux signalés',
 };
 
+/**
+ * Niveau de rectitude d'un tracé d'après ses virages marqués par km.
+ * Seuils calibrés sur des tracés réels de 8 km (de 1,9 à 5,7 virages/km selon la ville).
+ */
+export function straightnessInfo(turnsPerKm?: number): {
+  label: string;
+  tone: 'good' | 'mid' | 'bad';
+} | null {
+  if (typeof turnsPerKm !== 'number') return null;
+  if (turnsPerKm <= 3) return { label: 'Tracé direct', tone: 'good' };
+  if (turnsPerKm <= 4.2) return { label: 'Tracé moyen', tone: 'mid' };
+  return { label: 'Tracé sinueux', tone: 'bad' };
+}
+
 export function formatDistanceKm(km: number): string {
   return `${km.toFixed(1).replace('.', ',')} km`;
 }
@@ -74,6 +88,40 @@ export function formatDurationMin(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return `${h}h${m.toString().padStart(2, '0')}`;
+}
+
+
+function haversineKmClient(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+/** Altitude (m) du i-ème point du tracé, interpolée sur le profil mesuré ; null si indisponible. */
+export function buildElevationLookup(route: RunningRoute): ((i: number) => number) | null {
+  const prof = route.elevationProfile;
+  if (!route.elevationAvailable || prof.length < 2 || route.path.length < 2) return null;
+
+  const cum: number[] = [0];
+  for (let i = 1; i < route.path.length; i++) {
+    cum.push(cum[i - 1] + haversineKmClient(route.path[i - 1], route.path[i]));
+  }
+  const pathTotal = cum[cum.length - 1] || 1;
+  const profTotal = prof[prof.length - 1].distKm || pathTotal;
+
+  return (i: number) => {
+    const d = (cum[i] / pathTotal) * profTotal;
+    let k = 0;
+    while (k < prof.length - 2 && prof[k + 1].distKm < d) k++;
+    const a = prof[k];
+    const b = prof[k + 1];
+    const span = b.distKm - a.distKm;
+    const t = span > 0 ? Math.min(1, Math.max(0, (d - a.distKm) / span)) : 0;
+    return a.ele + (b.ele - a.ele) * t;
+  };
 }
 
 function escapeXml(s: string): string {
@@ -89,14 +137,14 @@ function escapeXml(s: string): string {
 export function exportRouteToGpx(route: RunningRoute): void {
   const escapedName = escapeXml(route.name);
 
-  // Le profil d'altitude a exactement un point par point du tracé (garanti par le serveur).
-  // Sans altitude mesurée, la balise <ele> est omise : aucune valeur n'est inventée.
-  const hasEle =
-    route.elevationAvailable && route.elevationProfile.length === route.path.length;
-
+  // Le profil d'altitude compte moins de points que le tracé (≈ 1 mesure tous les 100 m,
+  // la résolution du modèle de terrain). L'altitude de chaque point du tracé est interpolée
+  // linéairement le long de la distance. Sans altitude mesurée, <ele> est omis : rien n'est inventé.
+  const eleAt = buildElevationLookup(route);
   const trkpts = route.path
     .map((p, i) => {
-      const ele = hasEle ? `<ele>${route.elevationProfile[i].ele.toFixed(1)}</ele>` : '';
+      const e = eleAt ? eleAt(i) : null;
+      const ele = e === null ? '' : `<ele>${e.toFixed(1)}</ele>`;
       return `      <trkpt lat="${p.lat.toFixed(6)}" lon="${p.lng.toFixed(6)}">${ele}</trkpt>`;
     })
     .join('\n');

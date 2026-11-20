@@ -12,13 +12,18 @@ import {
   bearingDeg,
   haversineKm,
   offsetLatLng,
+  overlapFraction,
+  sampleIndicesByDistance,
+  shapeCompactness,
   simplifyIndices,
+  turnMetrics,
 } from './geo.ts';
 import { TtlCache, UpstreamError, fetchWithTimeout } from './http.ts';
 import { analyzePath, findPlaces, type OsmPlace } from './osm.ts';
+import { fetchFootRoute, traceAttributes, type FootRoute, type TraceSummary } from './routing.ts';
 
-/** Nombre max. de points conservés (= limite Open-Meteo, profil et tracé alignés 1:1). */
-const MAX_PATH_POINTS = 100;
+/** Nombre max. de points conservés (profil d'altitude et tracé alignés 1:1 ; altitudes lues par lots de 100). */
+const MAX_PATH_POINTS = 250;
 
 /* ------------------------------------------------------------------ */
 /* Géocodage inverse (Nominatim)                                       */
@@ -58,53 +63,6 @@ export async function reverseGeocodeFrance(
 }
 
 /* ------------------------------------------------------------------ */
-/* Routage piéton (réseau OpenStreetMap, vrai profil « foot »)         */
-/* ------------------------------------------------------------------ */
-
-interface FootRoute {
-  path: LatLngPoint[];
-  distanceKm: number;
-}
-
-const routeCache = new TtlCache<FootRoute>(3 * 3600_000, 300);
-
-// Le serveur de démonstration router.project-osrm.org n'implémente que le profil voiture,
-// quel que soit le segment d'URL. routing.openstreetmap.de expose un vrai profil piéton.
-const FOOT_ROUTER = 'https://routing.openstreetmap.de/routed-foot/route/v1/foot';
-
-async function fetchFootRoute(waypoints: LatLngPoint[]): Promise<FootRoute | null> {
-  const coords = waypoints.map((p) => `${p.lng.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
-  const hit = routeCache.get(coords);
-  if (hit) return hit;
-
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const res = await fetchWithTimeout(
-        `${FOOT_ROUTER}/${coords}?overview=full&geometries=geojson&continue_straight=false`,
-        {},
-        9000
-      );
-      if (!res.ok) continue;
-      const data = (await res.json()) as {
-        code?: string;
-        routes?: { distance: number; geometry: { coordinates: [number, number][] } }[];
-      };
-      const r = data.code === 'Ok' ? data.routes?.[0] : undefined;
-      if (!r || !r.geometry?.coordinates?.length || !(r.distance > 0)) continue;
-      const out: FootRoute = {
-        path: r.geometry.coordinates.map(([lng, lat]) => ({ lat, lng })),
-        distanceKm: r.distance / 1000,
-      };
-      routeCache.set(coords, out);
-      return out;
-    } catch {
-      // nouvelle tentative puis abandon : aucun tracé inventé
-    }
-  }
-  return null;
-}
-
-/* ------------------------------------------------------------------ */
 /* Construction d'un parcours vérifié                                  */
 /* ------------------------------------------------------------------ */
 
@@ -133,7 +91,9 @@ interface BuildOptions {
 
 async function buildRoute(
   foot: FootRoute,
-  opts: BuildOptions
+  opts: BuildOptions,
+  withElevation = true,
+  attrs?: TraceSummary | null
 ): Promise<RunningRoute> {
   const { path } = foot;
 
@@ -149,8 +109,16 @@ async function buildRoute(
 
   const distanceKm = Math.round(foot.distanceKm * 10) / 10;
 
+  // Altitude : le modèle de terrain a ~90 m de résolution, mesurer plus finement n'apporte rien
+  // et épuise le quota du service. ≈ 1 mesure tous les 100 m, 100 points au plus (1 requête).
+  const elevIdx = sampleIndicesByDistance(cumKm, 0.1, 100);
   const [elev, osm] = await Promise.all([
-    measureElevation(shownPath, cumKm),
+    withElevation
+      ? measureElevation(
+          elevIdx.map((i) => shownPath[i]),
+          elevIdx.map((i) => cumKm[i])
+        )
+      : Promise.resolve(null),
     analyzePath(path),
   ]);
 
@@ -164,6 +132,7 @@ async function buildRoute(
 
   const gain = elev?.gainM ?? 0;
   const environment: EnvironmentType = osm?.environment ?? 'inconnu';
+  const turns = turnMetrics(path);
 
   const first = path[0];
   const last = path[path.length - 1];
@@ -189,6 +158,12 @@ async function buildRoute(
     flatness,
     practicable: osm?.practicable ?? true,
     litPercentage: osm && osm.lighting !== 'inconnu' ? osm.litPct : undefined,
+    windinessDegPerKm: Math.round(turns.degPerKm),
+    turnsPerKm: Math.round(turns.turnsPerKm * 10) / 10,
+    // Étiquettes OSM (Overpass) si disponibles, sinon attributs du moteur de routage.
+    greenwayPct: osm?.greenwayPct ?? attrs?.dedicatedPct,
+    urbanStreetPct: osm?.urbanStreetPct ?? attrs?.roadPct,
+    cobblePct: osm?.cobblePct ?? attrs?.roughPct,
     surfaceSummary: osm?.surfaceSummary ?? 'Revêtement non vérifiable (OpenStreetMap indisponible)',
     safetyNotes:
       osm?.safetyNotes ?? [
@@ -213,114 +188,199 @@ async function buildRoute(
 /* Boucle à distance cible                                             */
 /* ------------------------------------------------------------------ */
 
+type LoopShape = 'triangle' | 'quad';
+
+/**
+ * Points de passage d'une boucle. Le routeur choisit le plus court chemin entre eux :
+ * la forme conditionne donc le nombre de virages.
+ * - triangle : 2 points de passage, grands côtés → peu de virages
+ * - quad : 3 points de passage autour d'un centre → boucle plus ronde
+ */
+function loopWaypoints(
+  origin: LatLngPoint,
+  shape: LoopShape,
+  scaleKm: number,
+  bearing: number
+): LatLngPoint[] {
+  if (shape === 'triangle') {
+    return [
+      origin,
+      offsetLatLng(origin, scaleKm, bearing - 32),
+      offsetLatLng(origin, scaleKm, bearing + 32),
+      origin,
+    ];
+  }
+  const center = offsetLatLng(origin, scaleKm * 0.9, bearing);
+  return [
+    origin,
+    offsetLatLng(center, scaleKm * 0.85, bearing - 75),
+    offsetLatLng(center, scaleKm * 0.95, bearing + 10),
+    offsetLatLng(center, scaleKm * 0.85, bearing + 85),
+    origin,
+  ];
+}
+
+/** Échelle de départ par forme (le tracé réel fait ~1,3× la distance à vol d'oiseau). */
+const SHAPE_BASE_DIVISOR: Record<LoopShape, number> = { triangle: 4.0, quad: 6.2 };
+
+/**
+ * Notation d'une boucle (sur 1). Principe repris de routess (ADR 0029) : chaque défaut
+ * observé devient une mesure pénalisée. Le recouvrement pèse le plus (aller-retour, impasses).
+ */
+const SCORE_W = {
+  overlap: 0.3, // pas de retour par le même chemin
+  distance: 0.2, // proche de la distance demandée
+  straightness: 0.25, // peu de virages
+  compactness: 0.1, // vraie boucle, pas une languette
+  character: 0.15, // voies dédiées, peu de chaussée / pavés / routes à fort trafic
+} as const;
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+/** ±10 % de la cible = parfait, puis décroissance en cloche. */
+function distanceScore(actualKm: number, targetKm: number): number {
+  const miss = Math.abs(actualKm - targetKm) / targetKm;
+  if (miss <= 0.1) return 1;
+  const over = (miss - 0.1) / 0.25;
+  return Math.exp(-over * over);
+}
+
+/** 250 °/km (très direct) → 1 ; 550 °/km (très sinueux) → 0. Calibré sur des tracés réels de 8 km. */
+const straightnessScore = (degPerKm: number) => clamp01(1 - (degPerKm - 250) / 300);
+
+/** Caractère d'un tracé d'après le moteur : favorise les voies dédiées, pénalise rues, pavés et axes routiers. */
+function characterScore(t: TraceSummary): number {
+  return clamp01(
+    0.6 * (t.dedicatedPct / 100) +
+      0.4 * (1 - t.roadPct / 100) -
+      0.8 * (t.roughPct / 100) -
+      0.5 * (t.busyPct / 100)
+  );
+}
+
 export async function generateSmartLoop(
   req: LoopGenerationRequest
 ): Promise<RunningRoute> {
   const origin: LatLngPoint = { lat: req.lat, lng: req.lng };
   const targetKm = Math.min(Math.max(req.targetKm, 1.5), 35);
 
+  // Les lieux (Overpass) ne servent qu'à orienter les caps vers un cours d'eau : on ne les
+  // demande que si c'est utile.
   const [places, cityName] = await Promise.all([
-    findPlaces(req.lat, req.lng, Math.max(2, targetKm / 2)),
+    req.preferWater ? findPlaces(req.lat, req.lng, Math.max(2, targetKm / 2)) : Promise.resolve(null),
     reverseGeocodeFrance(req.lat, req.lng),
   ]);
 
+  // Caps : d'abord vers un cours d'eau proche, puis balayage régulier (6 caps).
   const bearings: number[] = [];
   const pushDistinct = (b: number) => {
-    const close = bearings.some((e) => {
-      const d = Math.abs(((e - b + 540) % 360) - 180);
-      return d < 35; // écart angulaire réel < 35°
-    });
+    const close = bearings.some((e) => Math.abs(((e - b + 540) % 360) - 180) < 30);
     if (!close) bearings.push(b);
   };
   if (req.preferWater) {
     const w = places?.find((p) => p.category === 'water');
     if (w) pushDistinct(bearingDeg(origin, w));
   }
-  const park = places?.find((p) => p.category === 'park');
-  if (park) pushDistinct(bearingDeg(origin, park));
-  for (const b of [25, 115, 205, 295]) {
-    if (bearings.length >= 4) break;
+  for (const b of [20, 80, 140, 200, 260, 320]) {
+    if (bearings.length >= 6) break;
     pushDistinct(b);
   }
 
-  const buildWaypoints = (rKm: number, bearing: number): LatLngPoint[] => {
-    const center = offsetLatLng(origin, rKm * 0.9, bearing);
-    return [
-      origin,
-      offsetLatLng(center, rKm * 0.85, bearing - 75),
-      offsetLatLng(center, rKm * 0.95, bearing + 10),
-      offsetLatLng(center, rKm * 0.85, bearing + 85),
-      origin,
-    ];
-  };
-
-  const baseRadiusKm = targetKm / 6.2;
-  const routed = await Promise.all(
-    bearings.map(async (bearing) => {
-      let r = await fetchFootRoute(buildWaypoints(baseRadiusKm, bearing));
-      if (r) {
-        const ratio = targetKm / r.distanceKm;
-        if (ratio < 0.9 || ratio > 1.1) {
-          const adj = baseRadiusKm * Math.min(Math.max(ratio, 0.45), 1.85);
-          const refined = await fetchFootRoute(buildWaypoints(adj, bearing));
-          if (refined) r = refined;
-        }
-      }
-      return r;
-    })
+  // Étage 1 (géométrie seule, peu coûteux) : on calcule de nombreux candidats.
+  const jobs = bearings.flatMap((bearing) =>
+    (['triangle', 'quad'] as const).map((shape) => ({ bearing, shape }))
   );
 
-  // on ne garde que les boucles dont la distance réelle est proche de la cible
-  const viable = routed
-    .filter((r): r is FootRoute => r !== null && r.distanceKm > 0.5)
-    .map((r) => ({ r, err: Math.abs(r.distanceKm - targetKm) / targetKm }))
-    .filter((c) => c.err <= 0.25)
-    .sort((a, b) => a.err - b.err)
-    .slice(0, req.preferFlat ? 4 : 3); // « plat » : on compare toutes les boucles viables
+  const routed = await mapLimit(jobs, 3, async ({ bearing, shape }) => {
+    const base = targetKm / SHAPE_BASE_DIVISOR[shape];
+    let r = await fetchFootRoute(loopWaypoints(origin, shape, base, bearing));
+    if (r) {
+      const ratio = targetKm / r.distanceKm;
+      if (ratio < 0.9 || ratio > 1.1) {
+        const adj = base * Math.min(Math.max(ratio, 0.45), 1.85);
+        const refined = await fetchFootRoute(loopWaypoints(origin, shape, adj, bearing));
+        if (refined) r = refined;
+      }
+    }
+    return r;
+  });
 
-  if (viable.length === 0) {
+  const geom = routed
+    .filter((r): r is FootRoute => r !== null && r.distanceKm > 0.5)
+    .map((r) => {
+      const errRatio = Math.abs(r.distanceKm - targetKm) / targetKm;
+      const turns = turnMetrics(r.path);
+      const overlap = overlapFraction(r.path);
+      const stage1 =
+        (SCORE_W.overlap * (1 - clamp01(overlap * 2)) +
+          SCORE_W.distance * distanceScore(r.distanceKm, targetKm) +
+          SCORE_W.straightness * straightnessScore(turns.degPerKm) +
+          SCORE_W.compactness * clamp01(shapeCompactness(r.path) / 0.6)) /
+        (1 - SCORE_W.character);
+      return { r, errRatio, overlap, stage1 };
+    })
+    .filter((c) => c.errRatio <= 0.25);
+
+  // Barrière de qualité : on écarte les aller-retours (> 35 % de recouvrement) tant qu'il reste mieux.
+  const clean = geom.filter((c) => c.overlap <= 0.35);
+  const pool = (clean.length > 0 ? clean : geom).sort((a, b) => b.stage1 - a.stage1);
+
+  if (pool.length === 0) {
     throw new UpstreamError(
       'routage',
       'aucune boucle piétonne réelle n’a pu être calculée à cette distance depuis ce point'
     );
   }
 
+  // Étage 2 : les meilleurs candidats sont caractérisés par le moteur (revêtement, type de voie).
   const label = cityName || 'votre point';
-  const candidates = await Promise.all(
-    viable.map(({ r }, i) =>
-      buildRoute(r, {
-        id: `loop-${Math.round(req.lat * 1e4)}_${Math.round(req.lng * 1e4)}-${Math.round(targetKm * 10)}-${i}`,
-        name: `Boucle ${fmtKm(r.distanceKm)} km`,
-        city: cityName || 'Départ sur votre repère',
-        source: 'generated_loop',
-        origin,
-        description: ({ distanceKm }) =>
-          `Boucle piétonne de ${fmtKm(distanceKm)} km calculée sur le réseau OpenStreetMap depuis ${label}.`,
-      })
-    )
-  );
-
-  const scored = candidates.map((c) => {
-    let score = 100 - Math.abs(c.distanceKm - targetKm) * 3.5;
-    if (req.preferWater && c.alongWater) score += 12;
-    if (req.preferLit && c.lighting !== 'inconnu') score += (c.litPercentage ?? 0) * 0.12;
-    if (req.preferFlat) {
-      if (c.flatness === 'plat') score += 12;
-      else if (c.flatness === 'vallonne') score += 4;
-    }
-    if (req.terrainPreference === 'bitume' && c.terrain === 'bitume') score += 10;
-    if (
-      req.terrainPreference === 'nature' &&
-      (c.terrain === 'stabilise' || c.terrain === 'terre')
-    ) {
-      score += 10;
-    }
-    if (!c.practicable) score -= 40;
-    return { c, score };
+  const top = pool.slice(0, req.preferFlat ? 4 : 3);
+  const optsFor = (r: FootRoute, i: number): BuildOptions => ({
+    id: `loop-${Math.round(req.lat * 1e4)}_${Math.round(req.lng * 1e4)}-${Math.round(targetKm * 10)}-${i}`,
+    name: `Boucle ${fmtKm(r.distanceKm)} km`,
+    city: cityName || 'Départ sur votre repère',
+    source: 'generated_loop',
+    origin,
+    description: ({ distanceKm }) =>
+      `Boucle piétonne de ${fmtKm(distanceKm)} km calculée sur le réseau OpenStreetMap depuis ${label}.`,
   });
 
-  scored.sort((a, b) => b.score - a.score);
-  return scored[0].c;
+  // Les préférences « cours d'eau », « éclairé » et « plat » exigent des données OSM / d'altitude
+  // pour chaque finaliste ; sinon, seul le gagnant sera enrichi (économise Overpass et Open-Meteo).
+  const needsFullBuild = req.preferWater || req.preferLit || req.preferFlat;
+  const finalists = await Promise.all(
+    top.map(async (c, i) => {
+      const [attrs, built] = await Promise.all([
+        traceAttributes(c.r.path),
+        needsFullBuild ? buildRoute(c.r, optsFor(c.r, i), req.preferFlat) : Promise.resolve(null),
+      ]);
+      let score = SCORE_W.character > 0 ? c.stage1 * (1 - SCORE_W.character) : c.stage1;
+      score += SCORE_W.character * (attrs ? characterScore(attrs) : 0.5); // 0,5 = neutre si inconnu
+      if (built) {
+        if (req.preferWater && built.alongWater) score += 0.08;
+        if (req.preferLit && built.lighting !== 'inconnu') score += (built.litPercentage ?? 0) * 0.0008;
+        if (req.preferFlat) {
+          if (built.flatness === 'plat') score += 0.08;
+          else if (built.flatness === 'vallonne') score += 0.03;
+        }
+        if (req.terrainPreference === 'bitume' && built.terrain === 'bitume') score += 0.06;
+        if (
+          req.terrainPreference === 'nature' &&
+          (built.terrain === 'stabilise' || built.terrain === 'terre')
+        ) {
+          score += 0.06;
+        }
+        if (!built.practicable) score -= 0.3;
+      }
+      if (attrs && attrs.stepsKm > 0.01) score -= 0.15; // escaliers : à éviter
+      return { c, attrs, built, score, i };
+    })
+  );
+
+  finalists.sort((a, b) => b.score - a.score);
+  const win = finalists[0];
+  if (win.built && (req.preferFlat || win.built.elevationAvailable)) return win.built;
+  return buildRoute(win.c.r, optsFor(win.c.r, win.i), true, win.attrs);
 }
 
 /* ------------------------------------------------------------------ */
@@ -352,14 +412,24 @@ async function buildPlaceRoute(
 ): Promise<RunningRoute | null> {
   const target: LatLngPoint = { lat: place.lat, lng: place.lng };
   const bearing = bearingDeg(origin, target);
-  const side = offsetLatLng(
-    target,
-    Math.min(0.8, Math.max(0.35, place.distanceKm * 0.45)),
-    (bearing + (idx % 2 === 0 ? 70 : -70) + 360) % 360
-  );
+  const sideKm = Math.min(0.8, Math.max(0.35, place.distanceKm * 0.45));
 
-  const foot = await fetchFootRoute([origin, target, side, origin]);
-  if (!foot || foot.distanceKm < 0.8) return null;
+  // Deux retours possibles (à gauche / à droite du lieu) : on garde le plus direct.
+  const variants = await Promise.all(
+    [70, -70].map((angle) =>
+      fetchFootRoute([
+        origin,
+        target,
+        offsetLatLng(target, sideKm, (bearing + angle + 360) % 360),
+        origin,
+      ])
+    )
+  );
+  const valid = variants.filter((v): v is FootRoute => v !== null && v.distanceKm >= 0.8);
+  if (valid.length === 0) return null;
+  const foot = valid.sort(
+    (a, b) => turnMetrics(a.path).degPerKm - turnMetrics(b.path).degPerKm
+  )[0];
 
   const prefix =
     place.category === 'water'
