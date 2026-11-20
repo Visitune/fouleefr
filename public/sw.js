@@ -6,7 +6,7 @@
  * - Les tuiles de carte (autre origine) ne sont pas interceptées : la politique d'usage
  *   d'OpenStreetMap n'autorise pas le stockage massif de tuiles.
  */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL_CACHE = `foulee-shell-${VERSION}`;
 const ASSET_CACHE = `foulee-assets-${VERSION}`;
 

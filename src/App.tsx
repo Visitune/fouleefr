@@ -578,6 +578,9 @@ export default function App() {
               (ODbL). Altitudes : Open-Meteo. Les attributs absents d’OpenStreetMap
               sont indiqués « non renseigné ».
             </p>
+            <p className="text-[11px] text-slate-400 tabular-nums">
+              Version {__APP_VERSION__} · {__APP_BUILD_DATE__}
+            </p>
           </div>
         </aside>
 
